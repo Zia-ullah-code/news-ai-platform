@@ -3,7 +3,7 @@
 RSS news → AWS Lambda (Terraform) → Redpanda → dbt + DuckDB → LangGraph agent
 (importance + summary via Groq/Gemini) → Streamlit dashboard. LangSmith tracing.
 
-**Status: Day 4 — LangGraph agent (summary, importance, category via Gemini; LangSmith-traced).** See
+**Status: Day 5 — full local system ✅ (week 1 checkpoint): RSS → Redpanda → dbt/DuckDB → LangGraph/Gemini → Streamlit).** See
 [PLAN.md](PLAN.md) for the full build plan and [docs/design.md](docs/design.md)
 for contracts.
 
@@ -18,7 +18,8 @@ docker compose up -d                      # single-node Redpanda + pandaproxy
 python -m services.producer.fetch         # RSS -> console (no Kafka needed)
 python -m services.producer.publish       # RSS -> news.raw (add --http for the
                                           #   pandaproxy path the Lambda uses)
-python -m services.scheduler.main --once  # one full cycle: consume -> dbt -> metrics
+python -m services.scheduler.main --once  # one full cycle: consume -> dbt -> AI -> metrics
 python -m services.scheduler.main          # the real thing: a cycle every 5 min
+streamlit run services/dashboard/app.py    # dashboard at http://localhost:8501
 pytest tests/                             # contract tests
 ```
