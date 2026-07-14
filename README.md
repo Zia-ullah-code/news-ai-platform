@@ -3,7 +3,7 @@
 RSS news → AWS Lambda (Terraform) → Redpanda → dbt + DuckDB → LangGraph agent
 (importance + summary via Groq/Gemini) → Streamlit dashboard. LangSmith tracing.
 
-**Status: Day 5 — full local system ✅ (week 1 checkpoint): RSS → Redpanda → dbt/DuckDB → LangGraph/Gemini → Streamlit).** See
+**Status: Day 6 — deployed to AWS ✅: Terraform-managed EC2, live at https://zia-news.duckdns.org (dashboard behind basic auth).** See
 [PLAN.md](PLAN.md) for the full build plan and [docs/design.md](docs/design.md)
 for contracts.
 
