@@ -70,10 +70,21 @@ def insert_ai_results(
     conn: duckdb.DuckDBPyConnection, results: list[tuple[AIResult, str]]
 ) -> int:
     """Upsert enrichments keyed on article_id — idempotent, so a re-processed
-    article overwrites rather than duplicates."""
+    article overwrites rather than duplicates.
+
+    Deliberately two autocommit statements, not one transaction: DuckDB's ART
+    index can't handle delete+reinsert of the same key within a transaction,
+    and INSERT OR REPLACE rejects tables with LIST columns (keywords). Safe
+    here because the scheduler is the single writer and an article lost
+    between the two statements is simply re-queued by the anti-join.
+    """
     now = datetime.now(timezone.utc)
     conn.executemany(
-        "INSERT OR REPLACE INTO gold_ai_news VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "DELETE FROM gold_ai_news WHERE article_id = ?",
+        [(r.article_id,) for r, _ in results],
+    )
+    conn.executemany(
+        "INSERT INTO gold_ai_news VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (r.article_id, r.summary, r.importance, r.category, r.keywords,
              r.sentiment, r.reason, model, now)
