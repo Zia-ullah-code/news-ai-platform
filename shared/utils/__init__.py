@@ -14,7 +14,8 @@ def setup_logging(level: str = "INFO") -> None:
         stream=sys.stdout,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
-    )
+        force=True,  # AWS Lambda pre-installs a WARNING-level handler that
+    )                # basicConfig would otherwise silently defer to
 
 
 def mint_article_id(guid: str | None, link: str | None, source: str, published: str) -> str:

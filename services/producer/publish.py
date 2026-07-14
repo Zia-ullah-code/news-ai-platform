@@ -12,7 +12,6 @@ import argparse
 import logging
 
 import requests
-from confluent_kafka import Producer
 
 from shared.config import get_settings
 from shared.models import NewsMessage
@@ -24,6 +23,10 @@ log = logging.getLogger(__name__)
 
 
 def publish_kafka(messages: list[NewsMessage], bootstrap: str, topic: str) -> int:
+    # imported here, not module-top: the Lambda package ships without the
+    # Kafka client on purpose (it only ever uses publish_http)
+    from confluent_kafka import Producer
+
     producer = Producer({"bootstrap.servers": bootstrap})
     for msg in messages:
         producer.produce(topic, key=msg.article_id, value=msg.model_dump_json())

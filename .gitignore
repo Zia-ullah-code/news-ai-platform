@@ -27,3 +27,4 @@ infra/terraform/.terraform.lock.hcl
 .DS_Store
 .idea/
 .vscode/
+dist/

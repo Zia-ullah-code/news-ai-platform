@@ -66,6 +66,14 @@ class AgentState(TypedDict, total=False):
     payload: Optional[AIPayload]
     model_used: Optional[str]
     error: Optional[str]
+    quota_exhausted: bool
+
+
+def _is_quota_error(message: str) -> bool:
+    """Daily-quota exhaustion is terminal for the batch, not transient —
+    retrying it burns requests for nothing until the provider resets."""
+    lowered = message.lower()
+    return "resource_exhausted" in lowered or "quota" in lowered
 
 
 def build_graph(llms: list[tuple[str, object]]):
@@ -89,6 +97,9 @@ def build_graph(llms: list[tuple[str, object]]):
             return {"payload": payload, "model_used": label, "attempt": state["attempt"] + 1}
         except Exception as exc:  # provider error or schema-validation failure
             log.warning("llm attempt=%d model=%s failed: %s", state["attempt"], label, exc)
+            if _is_quota_error(str(exc)) and len(structured) == 1:
+                # sole provider out of quota: no retry can help — end the run
+                return {"error": str(exc), "quota_exhausted": True, "attempt": MAX_ATTEMPTS}
             return {"error": str(exc), "attempt": state["attempt"] + 1}
 
     def route(state: AgentState) -> str:
@@ -113,8 +124,8 @@ class Enricher:
         enable_tracing(self.settings)
         self.graph = build_graph(build_llms(self.settings))
 
-    def enrich(self, article: dict) -> tuple[Optional[AIResult], Optional[str]]:
-        """Returns (result, model_label); (None, None) when all attempts failed."""
+    def enrich(self, article: dict) -> tuple[Optional[AIResult], Optional[str], bool]:
+        """Returns (result, model_label, quota_exhausted)."""
         final: AgentState = self.graph.invoke(
             {"article": article},
             config={"run_name": "enrich_article",
@@ -124,10 +135,11 @@ class Enricher:
         if payload is None:
             log.error("enrichment failed article_id=%s error=%s",
                       article["article_id"][:12], final.get("error"))
-            return None, None
+            return None, None, bool(final.get("quota_exhausted"))
         return (
             AIResult(article_id=article["article_id"], **payload.model_dump()),
             final.get("model_used"),
+            False,
         )
 
     def enrich_batch(self, articles: list[dict]) -> list[tuple[AIResult, str]]:
@@ -135,7 +147,12 @@ class Enricher:
         for i, article in enumerate(articles):
             if i:
                 time.sleep(self.settings.ai_call_interval_s)  # stay under free-tier RPM
-            result, model = self.enrich(article)
+            result, model, quota_exhausted = self.enrich(article)
+            if quota_exhausted:
+                log.warning("provider daily quota exhausted — abandoning batch "
+                            "(%d/%d attempted); anti-join re-queues the rest",
+                            i + 1, len(articles))
+                break
             if result is not None:
                 out.append((result, model))
         return out
