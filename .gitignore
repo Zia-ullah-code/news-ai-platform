@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Secrets & local config
+.env
+
+# Data (DuckDB lives in data/, backed up to S3 in prod)
+data/*.duckdb
+data/*.duckdb.wal
+
+# dbt
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup
+infra/terraform/.terraform.lock.hcl
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
