@@ -1,5 +1,8 @@
-"""Provider interface: chat models built from whichever API keys exist,
-in preference order Groq -> Gemini. Adding a provider = adding a key to .env."""
+"""Provider interface: chat models built from whichever API keys exist.
+
+Preference order Gemini -> Groq: gemini-2.5-flash is the stronger judge, and
+Groq's much larger free daily quota (~4x) makes it the right failover when
+Gemini's 250/day runs out. Adding a provider = adding a key to .env."""
 
 import logging
 import os
@@ -26,16 +29,6 @@ def enable_tracing(settings: Settings) -> None:
 def build_llms(settings: Settings) -> list[tuple[str, object]]:
     """Return [(label, chat_model), ...] for every configured provider."""
     llms: list[tuple[str, object]] = []
-    if settings.groq_api_key:
-        from langchain_groq import ChatGroq
-
-        llms.append(
-            (
-                f"groq/{settings.groq_model}",
-                ChatGroq(model=settings.groq_model, api_key=settings.groq_api_key,
-                         temperature=0.2, max_retries=2),
-            )
-        )
     if settings.gemini_api_key:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -45,6 +38,16 @@ def build_llms(settings: Settings) -> list[tuple[str, object]]:
                 ChatGoogleGenerativeAI(model=settings.gemini_model,
                                        google_api_key=settings.gemini_api_key,
                                        temperature=0.2, max_retries=2),
+            )
+        )
+    if settings.groq_api_key:
+        from langchain_groq import ChatGroq
+
+        llms.append(
+            (
+                f"groq/{settings.groq_model}",
+                ChatGroq(model=settings.groq_model, api_key=settings.groq_api_key,
+                         temperature=0.2, max_retries=2),
             )
         )
     if not llms:

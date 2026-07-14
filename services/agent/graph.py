@@ -66,6 +66,7 @@ class AgentState(TypedDict, total=False):
     payload: Optional[AIPayload]
     model_used: Optional[str]
     error: Optional[str]
+    quota_dead: list  # provider labels that returned a quota error this run
     quota_exhausted: bool
 
 
@@ -97,10 +98,16 @@ def build_graph(llms: list[tuple[str, object]]):
             return {"payload": payload, "model_used": label, "attempt": state["attempt"] + 1}
         except Exception as exc:  # provider error or schema-validation failure
             log.warning("llm attempt=%d model=%s failed: %s", state["attempt"], label, exc)
-            if _is_quota_error(str(exc)) and len(structured) == 1:
-                # sole provider out of quota: no retry can help — end the run
-                return {"error": str(exc), "quota_exhausted": True, "attempt": MAX_ATTEMPTS}
-            return {"error": str(exc), "attempt": state["attempt"] + 1}
+            update: AgentState = {"error": str(exc), "attempt": state["attempt"] + 1}
+            if _is_quota_error(str(exc)):
+                dead = list({*state.get("quota_dead", []), label})
+                update["quota_dead"] = dead
+                if len(dead) >= len(structured):
+                    # every configured provider is out of quota — no retry can
+                    # help; end this run and let enrich_batch stop the batch
+                    update["quota_exhausted"] = True
+                    update["attempt"] = MAX_ATTEMPTS
+            return update
 
     def route(state: AgentState) -> str:
         if state.get("payload") is not None or state["attempt"] >= MAX_ATTEMPTS:

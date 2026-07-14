@@ -43,3 +43,15 @@ class TestNewsMessage:
     def test_fetched_at_defaults_utc(self):
         msg = NewsMessage(article_id="a", title="t", url="u", source="s")
         assert msg.fetched_at.tzinfo is not None
+
+
+class TestQuotaClassification:
+    def test_resource_exhausted_is_quota(self):
+        from services.agent.graph import _is_quota_error
+        assert _is_quota_error("429 RESOURCE_EXHAUSTED. quota exceeded")
+        assert _is_quota_error("Rate limit reached ... quota")
+
+    def test_transient_errors_are_not_quota(self):
+        from services.agent.graph import _is_quota_error
+        assert not _is_quota_error("connection reset by peer")
+        assert not _is_quota_error("3 validation errors for AIPayload")
