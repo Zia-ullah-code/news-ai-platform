@@ -15,6 +15,13 @@ services:
     depends_on:
       redpanda:
         condition: service_healthy
+    healthcheck:
+      # healthy = a cycle completed within the last 3 intervals
+      test: ["CMD-SHELL", "test $(( $(date +%s) - $(stat -c %Y /tmp/scheduler-heartbeat 2>/dev/null || echo 0) )) -lt 900"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
     restart: unless-stopped
 
   dashboard:

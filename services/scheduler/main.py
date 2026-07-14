@@ -162,6 +162,8 @@ def run_cycle(settings: Settings) -> None:
         "cycle summary fetched=%d published=%d new=%d ai_calls=%d failures=%d duration=%.1fs",
         consumed, consumed, new_articles, ai_calls, failures, duration,
     )
+    # liveness signal for the container healthcheck
+    Path("/tmp/scheduler-heartbeat").touch()
 
 
 def main() -> None:

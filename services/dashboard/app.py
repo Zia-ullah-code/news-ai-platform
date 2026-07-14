@@ -152,11 +152,47 @@ def render_stats() -> None:
         )
 
 
+def render_ops() -> None:
+    st.subheader("🛠 Pipeline Ops")
+    runs = query("SELECT * FROM pipeline_runs ORDER BY run_at DESC LIMIT 288")  # ~24h
+    if runs.empty:
+        st.info("No pipeline runs recorded yet.")
+        return
+
+    backlog = query(
+        "SELECT count(*) AS n FROM silver_news s ANTI JOIN gold_ai_news g USING (article_id)"
+    ).n[0]
+    age_min = (pd.Timestamp.now('UTC').tz_localize(None) - runs.run_at.max()) / pd.Timedelta("1min")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Last cycle", f"{age_min:.0f} min ago",
+              delta="healthy" if age_min < 15 else "stale", delta_color="normal" if age_min < 15 else "inverse")
+    c2.metric("Cycles (24h)", f"{len(runs)}")
+    c3.metric("Failures (24h)", f"{int(runs.failures.sum())}")
+    c4.metric("AI backlog", f"{int(backlog)}")
+
+    left, right = st.columns(2)
+    with left:
+        st.caption("Cycle duration (s)")
+        st.line_chart(runs.sort_values("run_at"), x="run_at", y="duration_s")
+        st.caption("Messages consumed per cycle")
+        st.line_chart(runs.sort_values("run_at"), x="run_at", y="published")
+    with right:
+        st.caption("New unique articles per cycle")
+        st.line_chart(runs.sort_values("run_at"), x="run_at", y="new_articles")
+        st.caption("AI calls per cycle")
+        st.line_chart(runs.sort_values("run_at"), x="run_at", y="ai_calls")
+
+    st.caption("Recent cycles")
+    st.dataframe(runs.head(20), width='stretch', hide_index=True)
+
+
 PAGES = {
     "Alerts": render_alerts,
     "Latest News": render_latest,
     "Search": render_search,
     "Statistics": render_stats,
+    "Ops": render_ops,
 }
 
 
