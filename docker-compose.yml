@@ -1,6 +1,46 @@
-# Local + EC2 deployment. Day 2: Redpanda only; scheduler/dashboard/caddy join later.
-# Ports match shared.config defaults: Kafka localhost:19092, pandaproxy localhost:8082.
+# Local + EC2 deployment — identical stack, differing only in env values and
+# the "edge" profile (Caddy: EC2 only, needs a public domain for TLS).
+# Host ports match shared.config defaults: Kafka 19092, pandaproxy 8082.
 services:
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.scheduler
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092      # in-network listener
+    volumes:
+      - ./data:/app/data                  # DuckDB lives here; shared with dashboard
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    env_file: .env
+    volumes:
+      - ./data:/app/data                  # read-only connections only (standing rule 1)
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    profiles: ["edge"]                    # EC2 only: docker compose --profile edge up -d
+    env_file: .env
+    ports:
+      - "80:80"                           # ACME HTTP challenge
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
     command:
@@ -28,3 +68,5 @@ services:
 
 volumes:
   redpanda_data:
+  caddy_data:
+  caddy_config:

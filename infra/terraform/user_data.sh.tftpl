@@ -1,0 +1,31 @@
+#!/bin/bash
+# First-boot provisioning: docker + compose, 2G swap, repo clone, backup cron.
+# App start happens in scripts/deploy_ec2.sh (needs .env, which never touches
+# terraform state or the repo).
+set -euxo pipefail
+
+# --- swap: 2G on a 2G-RAM host keeps builds and dbt from OOMing ---
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# --- docker + compose v2 (ubuntu 24.04 packages) ---
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 git unzip
+systemctl enable --now docker
+usermod -aG docker ubuntu
+
+# --- aws cli (arm64) for the backup cron ---
+curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+
+# --- app checkout ---
+sudo -u ubuntu git clone ${repo_url} /home/ubuntu/news-ai-platform
+
+# --- nightly duckdb backup to s3 (03:15 UTC) ---
+cat > /etc/cron.d/duckdb-backup <<'CRON'
+15 3 * * * ubuntu /usr/local/bin/aws s3 cp /home/ubuntu/news-ai-platform/data/news.duckdb s3://${backup_bucket}/news-$(date +\%F).duckdb >> /home/ubuntu/backup.log 2>&1
+CRON

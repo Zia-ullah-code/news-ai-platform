@@ -1,0 +1,25 @@
+# Edge proxy (EC2 only, compose profile "edge").
+# Terminates TLS for {$SITE_DOMAIN} via Let's Encrypt, enforces auth, and is
+# the ONLY container exposed to the internet (design.md §3).
+
+{$SITE_DOMAIN} {
+
+	# Ingest path: Lambda POSTs here. Bearer key checked at the edge —
+	# Redpanda itself never faces the internet.
+	handle /produce/* {
+		@authorized header Authorization "Bearer {$INGEST_API_KEY}"
+		handle @authorized {
+			uri strip_prefix /produce
+			reverse_proxy redpanda:8082
+		}
+		respond 401
+	}
+
+	# Everything else: the dashboard, behind basic auth.
+	handle {
+		basic_auth {
+			{$DASH_USER} {$DASH_PASS_HASH}
+		}
+		reverse_proxy dashboard:8501
+	}
+}
