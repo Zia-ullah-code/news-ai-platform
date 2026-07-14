@@ -31,7 +31,17 @@ class Settings(BaseSettings):
     # LLM
     groq_api_key: str = ""
     gemini_api_key: str = ""
-    llm_daily_call_budget: int = 500
+    groq_model: str = "llama-3.3-70b-versatile"
+    gemini_model: str = "gemini-2.5-flash"
+    llm_daily_call_budget: int = 200   # gemini-2.5-flash free tier: 250 RPD
+    ai_max_per_cycle: int = 10         # bounds cycle time and spreads quota use
+    ai_call_interval_s: float = 13.0   # free tier is 5 RPM; ~4.6/min stays under
+
+    # LangSmith (spec requirement; free tier)
+    langchain_tracing_v2: str = "false"
+    langchain_api_key: str = ""
+    langchain_project: str = "news-ai-platform"
+    langchain_endpoint: str = "https://api.smith.langchain.com"  # EU: https://eu.api.smith.langchain.com
 
     # Misc
     log_level: str = "INFO"

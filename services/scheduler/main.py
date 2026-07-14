@@ -72,9 +72,64 @@ def stage_dbt() -> None:
     log.info("dbt build ok")
 
 
+def _ai_quota_left_today(settings: Settings) -> int:
+    conn = duckdb.connect(settings.duckdb_path, read_only=True)
+    try:
+        used = conn.execute(
+            "SELECT coalesce(sum(ai_calls), 0) FROM pipeline_runs "
+            "WHERE run_at >= current_date"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    return max(0, settings.llm_daily_call_budget - int(used))
+
+
 def stage_ai(settings: Settings) -> int:
-    """Day 4: anti-join silver vs gold_ai_news -> LangGraph -> write results."""
-    return 0
+    """Anti-join silver vs gold_ai_news -> LangGraph -> upsert results.
+
+    Bounded by the per-cycle cap (cycle time) and the daily budget (free-tier
+    quota). Articles left behind are picked up by later cycles — the anti-join
+    is the work queue, so nothing is ever lost, only deferred.
+    """
+    limit = min(settings.ai_max_per_cycle, _ai_quota_left_today(settings))
+    if limit <= 0:
+        log.warning("ai stage skipped: daily LLM budget exhausted")
+        return 0
+
+    conn = duckdb.connect(settings.duckdb_path, read_only=True)
+    try:
+        pending = conn.execute(
+            """
+            SELECT s.article_id, s.title, s.source, s.url, s.content_clean
+            FROM silver_news s
+            ANTI JOIN gold_ai_news g USING (article_id)
+            ORDER BY s.published DESC NULLS LAST
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        columns = ["article_id", "title", "source", "url", "content_clean"]
+    except duckdb.Error:
+        return 0  # silver_news doesn't exist before the first dbt build
+    finally:
+        conn.close()
+
+    if not pending:
+        return 0
+
+    from services.agent.graph import Enricher  # heavy import, only when needed
+
+    articles = [dict(zip(columns, row)) for row in pending]
+    results = Enricher(settings).enrich_batch(articles)  # no DB connection held here
+
+    if results:
+        conn = db.connect(settings.duckdb_path)
+        try:
+            db.insert_ai_results(conn, results)
+        finally:
+            conn.close()
+    log.info("ai stage attempted=%d succeeded=%d", len(articles), len(results))
+    return len(articles)
 
 
 def run_cycle(settings: Settings) -> None:

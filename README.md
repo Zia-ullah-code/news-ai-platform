@@ -3,7 +3,7 @@
 RSS news → AWS Lambda (Terraform) → Redpanda → dbt + DuckDB → LangGraph agent
 (importance + summary via Groq/Gemini) → Streamlit dashboard. LangSmith tracing.
 
-**Status: Day 3 — dbt medallion + scheduler (bronze → silver → gold, 5-min cycle).** See
+**Status: Day 4 — LangGraph agent (summary, importance, category via Gemini; LangSmith-traced).** See
 [PLAN.md](PLAN.md) for the full build plan and [docs/design.md](docs/design.md)
 for contracts.
 

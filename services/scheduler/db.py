@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import duckdb
 
-from shared.models import NewsMessage
+from shared.models import AIResult, NewsMessage
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +17,18 @@ CREATE TABLE IF NOT EXISTS bronze_news (
     payload      JSON NOT NULL,          -- verbatim NewsMessage; duplicates allowed
     kafka_offset BIGINT NOT NULL,
     ingested_at  TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gold_ai_news (
+    article_id   TEXT PRIMARY KEY,      -- shape = shared.models.AIResult
+    summary      TEXT NOT NULL,
+    importance   INTEGER NOT NULL,
+    category     TEXT NOT NULL,
+    keywords     TEXT[] NOT NULL,
+    sentiment    TEXT NOT NULL,
+    reason       TEXT NOT NULL,
+    model        TEXT NOT NULL,
+    processed_at TIMESTAMP NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS pipeline_runs (
@@ -52,3 +64,21 @@ def insert_bronze(
     )
     log.info("bronze insert rows=%d", len(batch))
     return len(batch)
+
+
+def insert_ai_results(
+    conn: duckdb.DuckDBPyConnection, results: list[tuple[AIResult, str]]
+) -> int:
+    """Upsert enrichments keyed on article_id — idempotent, so a re-processed
+    article overwrites rather than duplicates."""
+    now = datetime.now(timezone.utc)
+    conn.executemany(
+        "INSERT OR REPLACE INTO gold_ai_news VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (r.article_id, r.summary, r.importance, r.category, r.keywords,
+             r.sentiment, r.reason, model, now)
+            for r, model in results
+        ],
+    )
+    log.info("gold_ai_news upsert rows=%d", len(results))
+    return len(results)
