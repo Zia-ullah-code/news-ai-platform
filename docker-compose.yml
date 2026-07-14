@@ -1,0 +1,30 @@
+# Local + EC2 deployment. Day 2: Redpanda only; scheduler/dashboard/caddy join later.
+# Ports match shared.config defaults: Kafka localhost:19092, pandaproxy localhost:8082.
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container       # overprovisioned, no production checks — fits small hosts
+      - --smp=1
+      - --memory=1G
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:8082
+    ports:
+      - "19092:19092"   # Kafka, external listener
+      - "8082:18082"    # pandaproxy HTTP (host 8082 -> external listener)
+      - "9644:9644"     # admin API (rpk, healthcheck)
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --api-urls=localhost:9644 | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  redpanda_data:

@@ -1,0 +1,54 @@
+"""DuckDB access. Standing rule 1: only the scheduler process opens this file
+for writing. Everything else (dashboard) must pass read_only=True."""
+
+import logging
+import pathlib
+from datetime import datetime, timezone
+
+import duckdb
+
+from shared.models import NewsMessage
+
+log = logging.getLogger(__name__)
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS bronze_news (
+    article_id   TEXT NOT NULL,
+    payload      JSON NOT NULL,          -- verbatim NewsMessage; duplicates allowed
+    kafka_offset BIGINT NOT NULL,
+    ingested_at  TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    run_at       TIMESTAMP NOT NULL,
+    fetched      INTEGER,
+    published    INTEGER,
+    new_articles INTEGER,
+    ai_calls     INTEGER,
+    failures     INTEGER,
+    duration_s   DOUBLE
+);
+"""
+
+
+def connect(path: str, read_only: bool = False) -> duckdb.DuckDBPyConnection:
+    if not read_only:
+        pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+    conn = duckdb.connect(path, read_only=read_only)
+    if not read_only:
+        conn.execute(SCHEMA)
+    return conn
+
+
+def insert_bronze(
+    conn: duckdb.DuckDBPyConnection, batch: list[tuple[NewsMessage, int]]
+) -> int:
+    """Append (message, kafka_offset) pairs. Append-only by design — dedup is
+    silver's job (dbt), not ingestion's."""
+    now = datetime.now(timezone.utc)
+    conn.executemany(
+        "INSERT INTO bronze_news VALUES (?, ?, ?, ?)",
+        [(m.article_id, m.model_dump_json(), offset, now) for m, offset in batch],
+    )
+    log.info("bronze insert rows=%d", len(batch))
+    return len(batch)
