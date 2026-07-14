@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: silver_news
+    description: >
+      Deduplicated, normalized articles. Exactly one row per article_id
+      (earliest ingestion wins). The AI stage reads from here via anti-join
+      against gold_ai_news.
+    columns:
+      - name: article_id
+        description: sha256 identity minted at the producer (design.md §1).
+        tests: [unique, not_null]
+      - name: title
+        tests: [not_null]
+      - name: url
+        tests: [not_null]
+      - name: source
+        tests: [not_null]
+      - name: published
+        description: Feed-provided publish time (UTC); null when absent.
+      - name: content_clean
+        description: Feed summary with HTML tags stripped.
+
+  - name: gold_news
+    description: Analytics-ready articles with derived reading metrics.
+    columns:
+      - name: article_id
+        tests: [unique, not_null]
+      - name: reading_time_min
+        description: ceil(word_count / 200 wpm), minimum 1.
+        tests: [not_null]
+      - name: publish_hour
+        description: UTC hour of publication; null when published is null.

@@ -17,13 +17,16 @@ class Settings(BaseSettings):
     )
 
     # Kafka / Redpanda
-    kafka_bootstrap: str = "localhost:19092"
+    kafka_bootstrap: str = "127.0.0.1:19092"
     kafka_topic: str = "news.raw"
     pandaproxy_url: str = "http://localhost:8082"
     ingest_api_key: str = "change-me"
 
     # Storage
     duckdb_path: str = "data/news.duckdb"
+
+    # Scheduler
+    cycle_interval_s: int = 300
 
     # LLM
     groq_api_key: str = ""

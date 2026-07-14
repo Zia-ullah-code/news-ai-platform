@@ -6,6 +6,7 @@ prints to console (Day 1 deliverable).
 """
 
 import calendar
+import html
 import logging
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -61,11 +62,11 @@ def fetch_feed(feed_url: str) -> list[NewsMessage]:
                         source=source,
                         published=str(published or ""),
                     ),
-                    title=entry.get("title", "").strip(),
+                    title=html.unescape(entry.get("title", "")).strip(),
                     url=entry.get("link", ""),
                     source=source,
                     published=published,
-                    content=entry.get("summary", ""),
+                    content=html.unescape(entry.get("summary", "")),
                 )
             )
         except Exception:

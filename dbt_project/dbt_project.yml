@@ -1,0 +1,9 @@
+name: news_ai
+version: "1.0.0"
+profile: news_ai
+
+model-paths: ["models"]
+
+models:
+  news_ai:
+    +materialized: table

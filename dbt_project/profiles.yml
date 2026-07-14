@@ -1,0 +1,9 @@
+# Profile lives in-repo (passed via --profiles-dir) so laptop and EC2 behave
+# identically. The DuckDB path comes from the same env var Settings uses.
+news_ai:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'data/news.duckdb') }}"
+      threads: 1
